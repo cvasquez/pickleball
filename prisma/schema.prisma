@@ -1,0 +1,156 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// To run migration: npx prisma migrate dev --name init
+// To add new columns: npx prisma migrate dev --name add_new_columns
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider        = "prisma-client-js"
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id            String   @id @default(cuid())
+  sessionToken  String   @unique
+  userId        String
+  expires       DateTime
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  displayName   String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  skillLevel    Float?
+  zipCode       String?
+  isSearchable  Boolean?
+  gamesCreated  Game[]
+  gamesPlayed   Player[]  @relation("GamesPlayed")
+  comments      Comment[] // User's comments
+  likes         Like[]    @relation("UserLikes")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Game {
+  id            String    @id @default(cuid())
+  creatorId     String?
+  creator       User?     @relation(fields: [creatorId], references: [id])
+  dateTime      DateTime
+  location      String?
+  scoreTeam1    Int       @default(0)
+  scoreTeam2    Int       @default(0)
+  team1Id       String
+  team1         Team      @relation("Team1Games", fields: [team1Id], references: [id])
+  team2Id       String
+  team2         Team      @relation("Team2Games", fields: [team2Id], references: [id])
+  achievements  Achievement[]
+  comments      Comment[] // Comments linked to this game
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Team {
+  id          String    @id @default(cuid())
+  name        String    // Make default come from the frontend - Could generate a random name
+  players     Player[]  @relation("GamePlayers")  // Players who are users
+  team1games  Game[]    @relation("Team1Games")
+  team2games  Game[]    @relation("Team2Games")
+  names       String[]  // For players who are not users
+}
+
+model Player {
+  @@id([userId, teamId])
+  userId      String
+  user        User      @relation("GamesPlayed", fields: [userId], references: [id])
+  teamId      String
+  team        Team      @relation("GamePlayers", fields: [teamId], references: [id])
+}
+
+model Achievement {
+  id          String   @id @default(cuid())
+  type        AchievementType
+  player      String
+  team        String
+  game        Game     @relation(fields: [gameId], references: [id])
+  gameId      String
+}
+
+enum AchievementType {
+  AROUND_THE_POST
+  ERNE
+  GOLDEN_PICKLE
+  GOOD_GAME
+  COMEBACK
+}
+
+model Drill {
+  id            Int      @id @default(autoincrement())
+  title         String
+  status        String   @default("draft") // Assuming "draft" and "published" as possible statuses
+  content       String   // To store HTML content
+  summary       String?  // A brief description of the drill for use on the drills index page
+  skillLevel    String   @default("beginner") // Assuming "beginner", "intermediate", and "advanced" as possible skill levels
+  numberPlayers Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  content   String
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  parentId  String?   // For replies; null for root comments
+  parent    Comment?  @relation("CommentToComment", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentToComment")
+  likes     Like[]    @relation("CommentLikes")
+  gameId    String?   // Optional; if the comment is linked to a game
+  game      Game?     @relation(fields: [gameId], references: [id])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Like {
+  @@id([userId, commentId])
+  userId        String
+  user          User      @relation("UserLikes", fields: [userId], references: [id])
+  commentId     String
+  comment       Comment   @relation("CommentLikes", fields: [commentId], references: [id])
+  createdAt     DateTime  @default(now())
+}
